@@ -13,16 +13,20 @@
 
     /* レンズ付近（上部）に細長い台本バー */
     #overlay {
-      position:absolute;
-      left:10px; right:10px;
-      top: calc(env(safe-area-inset-top) + 8px);
-      height: 140px;
-      background: rgba(0,0,0,0.35);
-      border-radius: 12px;
-      padding: 8px 10px;
-      overflow:hidden;
-      backdrop-filter: blur(6px);
-    }
+  position:absolute;
+  left:10px; right:10px;
+
+  /* ★ここを差し替え */
+  top: calc(env(safe-area-inset-top) + var(--vv-top, 0px) + 8px);
+
+  height: 140px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 12px;
+  padding: 8px 10px;
+  overflow:hidden;
+  backdrop-filter: blur(6px);
+}
+
     #scriptView {
       height:100%;
       overflow:hidden;
@@ -324,3 +328,4 @@
 </script>
 </body>
 </html>
+
