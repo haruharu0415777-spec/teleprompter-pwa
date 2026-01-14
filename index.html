@@ -27,18 +27,15 @@
   backdrop-filter: blur(6px);
 }
 
-  #scriptView {
-  /* ★高さ固定・overflow hidden をやめる */
+#scriptView {
   height: auto;
   overflow: visible;
-
   white-space: pre-wrap;
   font-size: 20px;
   line-height: 1.45;
-
-  /* おまけ：動きが滑らかになることが多い */
   will-change: transform;
 }
+
 
     /* 下部コントロール */
     #controls {
@@ -77,7 +74,17 @@
       flex:1; width:100%; resize:none; border-radius: 10px; border:1px solid rgba(255,255,255,0.2);
       background:#000; color:#fff; padding:10px; font-size:16px; line-height:1.4;
     }
-  </style>
+  </style#scriptMeasure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  left: -99999px;
+  top: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+>
+  
 </head>
 <body>
 <div id="wrap">
@@ -348,6 +355,7 @@ window.addEventListener('resize', updateViewportInset);
 </script>
 </body>
 </html>
+
 
 
 
