@@ -151,6 +151,21 @@
   let offsetY = 0;
   let rafId = null;
   let lastT = null;
+function updateViewportInset() {
+  // iOS/アプリ内ブラウザで「上にずれてる分」を吸収する
+  const vv = window.visualViewport;
+  const top = vv ? Math.max(0, vv.offsetTop) : 0;
+  document.documentElement.style.setProperty('--vv-top', `${top}px`);
+}
+
+// 初回と、画面変化時に追従
+updateViewportInset();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateViewportInset);
+  window.visualViewport.addEventListener('scroll', updateViewportInset);
+}
+window.addEventListener('orientationchange', updateViewportInset);
+window.addEventListener('resize', updateViewportInset);
 
   // 台本
   const savedScript = localStorage.getItem('script') || "ここに台本が表示されます。\n\nSCRIPTから貼り付けてください。";
@@ -328,4 +343,5 @@
 </script>
 </body>
 </html>
+
 
