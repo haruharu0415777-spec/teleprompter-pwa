@@ -6,39 +6,55 @@
   <meta name="theme-color" content="#000000" />
   <link rel="manifest" href="manifest.json" />
   <title>Teleprompter Camera</title>
+
   <style>
-    html, body { margin:0; height:100%; background:#000; color:#fff; font-family: -apple-system, system-ui, sans-serif; }
-    #wrap { position:fixed; inset:0; overflow:hidden; }
-    video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    #wrap { position: fixed; inset: 0; overflow: hidden; }
+    video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background:#000; }
 
-    /* レンズ付近（上部）に細長い台本バー */
+    /* 上部：台本バー（見切れ対策込み） */
     #overlay {
-  position:absolute;
-  left:10px; right:10px;
+      position: absolute;
+      left: 10px; right: 10px;
+      top: calc(env(safe-area-inset-top) + var(--vv-top, 0px) + 12px);
+      height: 150px;
 
-  /* ★ここを差し替え */
-  top: calc(env(safe-area-inset-top) + var(--vv-top, 0px) + 8px);
+      background: rgba(0,0,0,0.38);
+      border-radius: 12px;
+      padding: 10px 12px;
+      overflow: hidden;
+      backdrop-filter: blur(6px);
+    }
 
-  height: 140px;
-  background: rgba(0,0,0,0.35);
-  border-radius: 12px;
-  padding: 8px 10px;
-  overflow:hidden;
-  backdrop-filter: blur(6px);
-}
+    /* 表示する台本（transformで上に動かす） */
+    #scriptView{
+      height: auto;
+      overflow: visible;
+      white-space: pre-wrap;
+      font-size: 20px;
+      line-height: 1.45;
+      will-change: transform;
+    }
 
-#scriptView {
-  height: auto;
-  overflow: visible;
-  white-space: pre-wrap;
-  font-size: 20px;
-  line-height: 1.45;
-  will-change: transform;
-}
-
+    /* ★測定用：実高さを確実に取るための隠し要素 */
+    #scriptMeasure{
+      position: absolute;
+      visibility: hidden;
+      pointer-events: none;
+      left: -99999px;
+      top: 0;
+      white-space: pre-wrap;
+      line-height: 1.45;
+    }
 
     /* 下部コントロール */
-    #controls {
+    #controls{
       position:absolute;
       left: 10px; right: 10px;
       bottom: calc(env(safe-area-inset-bottom) + 10px);
@@ -46,316 +62,354 @@
       gap:8px;
       align-items:center;
       flex-wrap:wrap;
-      background: rgba(0,0,0,0.35);
+
+      background: rgba(0,0,0,0.38);
       border-radius: 12px;
       padding: 10px;
     }
-    button, input[type="range"] {
-      font-size: 16px;
+
+    button, input[type="range"] { font-size: 16px; }
+    button{
+      background:#111;
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.25);
+      border-radius: 10px;
+      padding: 8px 10px;
     }
-    button {
-      background:#111; color:#fff; border:1px solid rgba(255,255,255,0.25);
-      border-radius: 10px; padding: 8px 10px;
+    button:disabled{ opacity:0.5; }
+    .pill{
+      padding: 6px 10px;
+      border:1px solid rgba(255,255,255,0.25);
+      border-radius: 999px;
+      font-size: 13px;
     }
-    button:disabled { opacity:0.5; }
-    .pill { padding: 6px 10px; border:1px solid rgba(255,255,255,0.25); border-radius: 999px; font-size: 13px; }
-    a { color:#9bd; word-break: break-all; }
-    #editorModal {
+    a{ color:#9bd; word-break: break-all; }
+
+    /* SCRIPT貼り付けモーダル */
+    #editorModal{
       position:fixed; inset:0; display:none;
       background: rgba(0,0,0,0.7);
       padding: max(env(safe-area-inset-top), 12px) 12px max(env(safe-area-inset-bottom), 12px);
     }
-    #editorPanel {
+    #editorPanel{
       height:100%;
-      background:#111; border-radius: 12px; padding: 10px;
-      display:flex; flex-direction:column; gap:8px;
+      background:#111;
+      border-radius: 12px;
+      padding: 10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
     }
-    textarea {
-      flex:1; width:100%; resize:none; border-radius: 10px; border:1px solid rgba(255,255,255,0.2);
-      background:#000; color:#fff; padding:10px; font-size:16px; line-height:1.4;
+    textarea{
+      flex:1;
+      width:100%;
+      resize:none;
+      border-radius: 10px;
+      border:1px solid rgba(255,255,255,0.2);
+      background:#000;
+      color:#fff;
+      padding:10px;
+      font-size:16px;
+      line-height:1.4;
     }
-  </style#scriptMeasure {
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-  left: -99999px;
-  top: 0;
-  white-space: pre-wrap;
-  line-height: 1.45;
-}
->
-  
+  </style>
 </head>
+
 <body>
-<div id="wrap">
-  <video id="video" playsinline muted></video>
+  <div id="wrap">
+    <video id="video" playsinline muted></video>
 
-  <div id="overlay">
-    <div id="scriptView"></div>
-  </div>
+    <div id="overlay">
+      <div id="scriptView"></div>
+      <div id="scriptMeasure" aria-hidden="true"></div>
+    </div>
 
-  <div id="controls">
-    <button id="btnStartCam">カメラ開始</button>
-    <button id="btnRec" disabled>REC</button>
-    <button id="btnScroll" disabled>Scroll ▶︎</button>
+    <div id="controls">
+      <button id="btnStartCam">カメラ開始</button>
+      <button id="btnRec" disabled>REC</button>
+      <button id="btnScroll" disabled>Scroll ▶︎</button>
 
-    <span class="pill">速度</span>
-    <button id="btnSpeedMinus" disabled>−</button>
-    <input id="speed" type="range" min="5" max="120" value="30" disabled />
-    <button id="btnSpeedPlus" disabled>＋</button>
+      <span class="pill">速度</span>
+      <button id="btnSpeedMinus" disabled>−</button>
+      <input id="speed" type="range" min="5" max="120" value="30" disabled />
+      <button id="btnSpeedPlus" disabled>＋</button>
 
-    <span class="pill">文字</span>
-    <button id="btnFontMinus" disabled>A−</button>
-    <button id="btnFontPlus" disabled>A＋</button>
+      <span class="pill">文字</span>
+      <button id="btnFontMinus" disabled>A−</button>
+      <button id="btnFontPlus" disabled>A＋</button>
 
-    <button id="btnEdit" disabled>SCRIPT</button>
-    <span id="status" class="pill">待機</span>
-  </div>
+      <button id="btnEdit" disabled>SCRIPT</button>
+      <span id="status" class="pill">待機</span>
+    </div>
 
-  <div id="editorModal">
-    <div id="editorPanel">
-      <div style="display:flex; gap:8px; justify-content:space-between; align-items:center;">
-        <strong>台本を貼り付け</strong>
-        <div style="display:flex; gap:8px;">
-          <button id="btnEditorClose">閉じる</button>
-          <button id="btnEditorSave">反映</button>
+    <div id="editorModal">
+      <div id="editorPanel">
+        <div style="display:flex; gap:8px; justify-content:space-between; align-items:center;">
+          <strong>台本を貼り付け</strong>
+          <div style="display:flex; gap:8px;">
+            <button id="btnEditorClose">閉じる</button>
+            <button id="btnEditorSave">反映</button>
+          </div>
         </div>
+        <textarea id="scriptInput" placeholder="ここに台本を貼り付け"></textarea>
+        <div id="downloadArea" style="font-size:14px; opacity:0.9;"></div>
       </div>
-      <textarea id="scriptInput" placeholder="ここに台本を貼り付け"></textarea>
-      <div id="downloadArea" style="font-size:14px; opacity:0.9;"></div>
     </div>
   </div>
-</div>
 
-<script>
-  const video = document.getElementById('video');
-  const scriptView = document.getElementById('scriptView');
-  const statusEl = document.getElementById('status');
+  <script>
+    // DOM
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const scriptView = document.getElementById('scriptView');
+    const scriptMeasure = document.getElementById('scriptMeasure');
+    const statusEl = document.getElementById('status');
 
-  const btnStartCam = document.getElementById('btnStartCam');
-  const btnRec = document.getElementById('btnRec');
-  const btnScroll = document.getElementById('btnScroll');
-  const btnEdit = document.getElementById('btnEdit');
+    const btnStartCam = document.getElementById('btnStartCam');
+    const btnRec = document.getElementById('btnRec');
+    const btnScroll = document.getElementById('btnScroll');
+    const btnEdit = document.getElementById('btnEdit');
 
-  const speedSlider = document.getElementById('speed');
-  const btnSpeedMinus = document.getElementById('btnSpeedMinus');
-  const btnSpeedPlus = document.getElementById('btnSpeedPlus');
+    const speedSlider = document.getElementById('speed');
+    const btnSpeedMinus = document.getElementById('btnSpeedMinus');
+    const btnSpeedPlus = document.getElementById('btnSpeedPlus');
 
-  const btnFontMinus = document.getElementById('btnFontMinus');
-  const btnFontPlus  = document.getElementById('btnFontPlus');
+    const btnFontMinus = document.getElementById('btnFontMinus');
+    const btnFontPlus  = document.getElementById('btnFontPlus');
 
-  const editorModal = document.getElementById('editorModal');
-  const scriptInput = document.getElementById('scriptInput');
-  const btnEditorClose = document.getElementById('btnEditorClose');
-  const btnEditorSave = document.getElementById('btnEditorSave');
-  const downloadArea = document.getElementById('downloadArea');
+    const editorModal = document.getElementById('editorModal');
+    const scriptInput = document.getElementById('scriptInput');
+    const btnEditorClose = document.getElementById('btnEditorClose');
+    const btnEditorSave = document.getElementById('btnEditorSave');
+    const downloadArea = document.getElementById('downloadArea');
 
-  // 状態
-  let stream = null;
-  let recorder = null;
-  let chunks = [];
-  let isRecording = false;
+    // 状態（録画）
+    let stream = null;
+    let recorder = null;
+    let chunks = [];
+    let isRecording = false;
 
-  // テレプロンプター
-  let isScrolling = false;
-  let scrollSpeed = 30; // px/sec
-  let fontSize = 20;
-  let offsetY = 0;
-  let rafId = null;
-  let lastT = null;
-function updateViewportInset() {
-  // iOS/アプリ内ブラウザで「上にずれてる分」を吸収する
-  const vv = window.visualViewport;
-  const top = vv ? Math.max(0, vv.offsetTop) : 0;
-  document.documentElement.style.setProperty('--vv-top', `${top}px`);
-}
+    // テレプロンプター
+    let isScrolling = false;
+    let scrollSpeed = 30;     // px/sec
+    let fontSize = 20;
+    let offsetY = 0;
+    let rafId = null;
+    let lastT = null;
 
-// 初回と、画面変化時に追従
-updateViewportInset();
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', updateViewportInset);
-  window.visualViewport.addEventListener('scroll', updateViewportInset);
-}
-window.addEventListener('orientationchange', updateViewportInset);
-window.addEventListener('resize', updateViewportInset);
+    function setStatus(t){ statusEl.textContent = t; }
 
-  // 台本
-  const savedScript = localStorage.getItem('script') || "ここに台本が表示されます。\n\nSCRIPTから貼り付けてください。";
-  scriptView.textContent = savedScript;
-  scriptInput.value = savedScript;
+    function enableControls(enabled) {
+      [btnRec, btnScroll, btnEdit, speedSlider, btnSpeedMinus, btnSpeedPlus, btnFontMinus, btnFontPlus]
+        .forEach(el => el.disabled = !enabled);
+    }
 
-  function setStatus(t){ statusEl.textContent = t; }
+    // ★上の見切れ対策：VisualViewportの上ズレ分を吸収
+    function updateViewportInset() {
+      const vv = window.visualViewport;
+      const top = vv ? Math.max(0, vv.offsetTop) : 0;
+      document.documentElement.style.setProperty('--vv-top', `${top}px`);
+    }
+    updateViewportInset();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportInset);
+      window.visualViewport.addEventListener('scroll', updateViewportInset);
+    }
+    window.addEventListener('orientationchange', updateViewportInset);
+    window.addEventListener('resize', updateViewportInset);
 
-  function enableControls(enabled) {
-    [btnRec, btnScroll, btnEdit, speedSlider, btnSpeedMinus, btnSpeedPlus, btnFontMinus, btnFontPlus]
-      .forEach(el => el.disabled = !enabled);
-  }
+    function applyFont() {
+      scriptView.style.fontSize = fontSize + "px";
+    }
 
-  function applyFont() {
-    scriptView.style.fontSize = fontSize + "px";
-  }
-  applyFont();
+    // ★高さ計測を安定させる（スクロールが止まる問題の決定版）
+    function syncMeasureStyle() {
+      const w = overlay.clientWidth - 24; // padding分ざっくり
+      scriptMeasure.style.width = w + "px";
+      scriptMeasure.style.fontSize = fontSize + "px";
+      scriptMeasure.textContent = scriptView.textContent;
+    }
 
-  // “上に流れる”：中身が上に動くように、表示オフセットを増やしていく
-  function startScroll() {
-    if (isScrolling) return;
-    isScrolling = true;
-    btnScroll.textContent = "Scroll ⏸";
-    lastT = null;
+    function resetScroll() {
+      offsetY = 0;
+      scriptView.style.transform = "translateY(0px)";
+    }
 
-    const step = (t) => {
-      if (!isScrolling) return;
-      if (lastT == null) lastT = t;
-      const dt = (t - lastT) / 1000;
-      lastT = t;
+    function stopScroll() {
+      isScrolling = false;
+      btnScroll.textContent = "Scroll ▶︎";
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      lastT = null;
+    }
 
-      offsetY += scrollSpeed * dt;
+    function startScroll() {
+      if (isScrolling) return;
+      isScrolling = true;
+      btnScroll.textContent = "Scroll ⏸";
+      lastT = null;
 
-      // 終端計算（ざっくり：スクロール対象はscriptViewの内容高さ）
-      // scrollHeightを取るため、一時的にoverflow: auto で計測しても良いが、ここは簡易でOK
-      const overlayH = document.getElementById('overlay').clientHeight - 16;
-      const contentH = scriptView.scrollHeight; // white-space pre-wrap でOK
-      const maxOffset = Math.max(0, contentH - overlayH);
+      const step = (t) => {
+        if (!isScrolling) return;
+        if (lastT == null) lastT = t;
+        const dt = (t - lastT) / 1000;
+        lastT = t;
 
-      if (offsetY >= maxOffset) {
-        offsetY = maxOffset;
-        stopScroll();
-      }
+        // 高さを毎フレーム取り直す（台本更新/回転/バー変化に強い）
+        syncMeasureStyle();
 
-      scriptView.style.transform = `translateY(${-offsetY}px)`;
-      rafId = requestAnimationFrame(step);
-    };
-    rafId = requestAnimationFrame(step);
-  }
+        const overlayH = overlay.clientHeight - 20;      // padding分ざっくり
+        const contentH = scriptMeasure.scrollHeight;     // ★確実に取れる
+        const maxOffset = Math.max(0, contentH - overlayH);
 
-  function stopScroll() {
-    isScrolling = false;
-    btnScroll.textContent = "Scroll ▶︎";
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-    lastT = null;
-  }
+        // 進める
+        offsetY += scrollSpeed * dt;
 
-  function resetScroll() {
-    offsetY = 0;
-    scriptView.style.transform = "translateY(0px)";
-  }
+        if (offsetY >= maxOffset) {
+          offsetY = maxOffset;
+          stopScroll();
+        }
 
-  // カメラ開始
-  btnStartCam.addEventListener('click', async () => {
-    try {
-      setStatus("権限確認...");
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: true
-      });
-      video.srcObject = stream;
-      await video.play();
-
-      // iOS SafariはMediaRecorderのmimeTypeが環境で違うので、サポート確認して選ぶ
-      const candidates = [
-        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-        "video/mp4",
-        "video/webm;codecs=vp8,opus",
-        "video/webm"
-      ];
-      let chosen = "";
-      for (const c of candidates) {
-        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) { chosen = c; break; }
-      }
-      if (!window.MediaRecorder) throw new Error("この環境はMediaRecorder非対応です");
-
-      recorder = chosen ? new MediaRecorder(stream, { mimeType: chosen }) : new MediaRecorder(stream);
-      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: recorder.mimeType || "video/mp4" });
-        chunks = [];
-        const url = URL.createObjectURL(blob);
-
-        // iOSは自動で写真アプリ保存ができないので、リンクを出して共有/保存してもらう
-        downloadArea.innerHTML = `録画完了：<a href="${url}" download="teleprompter_record.${(blob.type.includes('webm')?'webm':'mp4')}">動画を保存</a><br>
-        ※iPhoneではリンクを開いて共有から保存してください。`;
+        scriptView.style.transform = `translateY(${-offsetY}px)`;
+        rafId = requestAnimationFrame(step);
       };
 
-      enableControls(true);
-      setStatus("カメラOK");
-    } catch (err) {
-      console.error(err);
-      setStatus("エラー: " + err.message);
-      alert("カメラ開始に失敗: " + err.message + "\\nHTTPSで開いているか確認してね。");
+      rafId = requestAnimationFrame(step);
     }
-  });
 
-  // 録画
-  btnRec.addEventListener('click', () => {
-    if (!recorder) return;
-    if (!isRecording) {
-      chunks = [];
-      recorder.start();
-      isRecording = true;
-      btnRec.textContent = "STOP";
-      setStatus("録画中");
-      // 好み：録画開始でスクロールも開始
-      if (!isScrolling) startScroll();
-    } else {
-      recorder.stop();
-      isRecording = false;
-      btnRec.textContent = "REC";
-      setStatus("保存準備");
-    }
-  });
+    // 台本初期化
+    const savedScript = localStorage.getItem('script')
+      || "ここに台本が表示されます。\n\nSCRIPTから貼り付けてください。";
 
-  // スクロール
-  btnScroll.addEventListener('click', () => {
-    if (!isScrolling) startScroll();
-    else stopScroll();
-  });
+    scriptView.textContent = savedScript;
+    scriptInput.value = savedScript;
 
-  // 速度
-  function setSpeed(v){
-    const min = +speedSlider.min, max = +speedSlider.max;
-    const nv = Math.min(Math.max(v, min), max);
-    speedSlider.value = nv;
-    scrollSpeed = nv;
-  }
-  speedSlider.addEventListener('input', () => setSpeed(+speedSlider.value));
-  btnSpeedMinus.addEventListener('click', () => setSpeed(+speedSlider.value - 5));
-  btnSpeedPlus.addEventListener('click',  () => setSpeed(+speedSlider.value + 5));
-
-  // フォント
-  function setFontSize(v){
-    fontSize = Math.min(Math.max(v, 14), 34);
     applyFont();
-    // サイズ変更で高さ変わるので、スクロール止めて先頭に戻すのが安全（好みで）
-    stopScroll();
+    syncMeasureStyle();
     resetScroll();
-  }
-  btnFontMinus.addEventListener('click', () => setFontSize(fontSize - 2));
-  btnFontPlus.addEventListener('click',  () => setFontSize(fontSize + 2));
 
-  // SCRIPT（貼り付け）
-  btnEdit.addEventListener('click', () => {
-    editorModal.style.display = "block";
-    scriptInput.focus();
-  });
-  btnEditorClose.addEventListener('click', () => { editorModal.style.display = "none"; });
-  btnEditorSave.addEventListener('click', () => {
-    const t = scriptInput.value || "（台本が空です）";
-    localStorage.setItem('script', t);
-    scriptView.textContent = t;
-    stopScroll();
-    resetScroll();
-    editorModal.style.display = "none";
-    setStatus("台本更新");
-  });
+    // 速度
+    function setSpeed(v){
+      const min = +speedSlider.min, max = +speedSlider.max;
+      const nv = Math.min(Math.max(v, min), max);
+      speedSlider.value = nv;
+      scrollSpeed = nv;
+    }
+    speedSlider.addEventListener('input', () => setSpeed(+speedSlider.value));
+    btnSpeedMinus.addEventListener('click', () => setSpeed(+speedSlider.value - 5));
+    btnSpeedPlus.addEventListener('click',  () => setSpeed(+speedSlider.value + 5));
 
-  // 初期値
-  setSpeed(+speedSlider.value);
-  setStatus("待機（カメラ開始）");
-</script>
+    // フォント
+    function setFontSize(v){
+      fontSize = Math.min(Math.max(v, 14), 34);
+      applyFont();
+      syncMeasureStyle();
+      stopScroll();
+      resetScroll();
+    }
+    btnFontMinus.addEventListener('click', () => setFontSize(fontSize - 2));
+    btnFontPlus.addEventListener('click',  () => setFontSize(fontSize + 2));
+
+    // SCRIPT（貼り付け）
+    btnEdit.addEventListener('click', () => {
+      editorModal.style.display = "block";
+      scriptInput.focus();
+    });
+    btnEditorClose.addEventListener('click', () => { editorModal.style.display = "none"; });
+    btnEditorSave.addEventListener('click', () => {
+      const t = scriptInput.value || "（台本が空です）";
+      localStorage.setItem('script', t);
+      scriptView.textContent = t;
+      syncMeasureStyle();
+      stopScroll();
+      resetScroll();
+      editorModal.style.display = "none";
+      setStatus("台本更新");
+    });
+
+    // スクロール
+    btnScroll.addEventListener('click', () => {
+      if (!isScrolling) startScroll();
+      else stopScroll();
+    });
+
+    // カメラ開始
+    btnStartCam.addEventListener('click', async () => {
+      try {
+        setStatus("権限確認...");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: true
+        });
+        video.srcObject = stream;
+        await video.play();
+
+        // iOS SafariはmimeTypeが環境で違うのでサポート確認
+        const candidates = [
+          "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+          "video/mp4",
+          "video/webm;codecs=vp8,opus",
+          "video/webm"
+        ];
+        let chosen = "";
+        for (const c of candidates) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
+            chosen = c; break;
+          }
+        }
+        if (!window.MediaRecorder) throw new Error("この環境はMediaRecorder非対応です");
+
+        recorder = chosen ? new MediaRecorder(stream, { mimeType: chosen }) : new MediaRecorder(stream);
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const type = recorder.mimeType || "video/mp4";
+          const blob = new Blob(chunks, { type });
+          chunks = [];
+          const url = URL.createObjectURL(blob);
+          const ext = type.includes('webm') ? 'webm' : 'mp4';
+
+          downloadArea.innerHTML =
+            `録画完了：<a href="${url}" download="teleprompter_record.${ext}">動画を保存</a><br>` +
+            `※iPhoneはリンクを開いて「共有」から保存してください。`;
+        };
+
+        enableControls(true);
+        setStatus("カメラOK");
+      } catch (err) {
+        console.error(err);
+        setStatus("エラー: " + err.message);
+        alert("カメラ開始に失敗: " + err.message + "\\nHTTPSで開いているか確認してね。");
+      }
+    });
+
+    // 録画
+    btnRec.addEventListener('click', () => {
+      if (!recorder) return;
+
+      if (!isRecording) {
+        chunks = [];
+        recorder.start();
+        isRecording = true;
+        btnRec.textContent = "STOP";
+        setStatus("録画中");
+
+        // 録画開始で自動スクロール（好み）
+        if (!isScrolling) startScroll();
+      } else {
+        recorder.stop();
+        isRecording = false;
+        btnRec.textContent = "REC";
+        setStatus("保存準備");
+      }
+    });
+
+    // 初期値
+    setSpeed(+speedSlider.value);
+    setStatus("待機（カメラ開始）");
+  </script>
 </body>
 </html>
-
-
-
-
