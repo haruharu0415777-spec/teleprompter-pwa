@@ -27,13 +27,18 @@
   backdrop-filter: blur(6px);
 }
 
-    #scriptView {
-      height:100%;
-      overflow:hidden;
-      white-space: pre-wrap;
-      font-size: 20px;
-      line-height: 1.45;
-    }
+  #scriptView {
+  /* ★高さ固定・overflow hidden をやめる */
+  height: auto;
+  overflow: visible;
+
+  white-space: pre-wrap;
+  font-size: 20px;
+  line-height: 1.45;
+
+  /* おまけ：動きが滑らかになることが多い */
+  will-change: transform;
+}
 
     /* 下部コントロール */
     #controls {
@@ -343,5 +348,6 @@ window.addEventListener('resize', updateViewportInset);
 </script>
 </body>
 </html>
+
 
 
